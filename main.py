@@ -48,7 +48,7 @@ class Ship:
         """Selects the ship and moves it according to the mouse position"""
         while self.active == True:
             self.rect.center = pygame.mouse.get_pos()
-            updateGameScreen(GAMESCREEN)
+            updateGameScreen(GAMESCREEN, GAMESTATE)
             for event in pygame.event.get():
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     if not self.checkForCollisions(pFleet):
@@ -151,7 +151,7 @@ class Ship:
     def draw(self, window):
         """Draw the ship to the screen"""
         window.blit(self.image, self.rect)
-        pygame.draw.rect(window, (255, 0, 0), self.rect, 1)
+        #pygame.draw.rect(window, (255, 0, 0), self.rect, 1)
         for guns in self.gunslist:
             guns.draw(window, self)
 
@@ -223,25 +223,27 @@ class Button:
 
     def focusOnButton(self, window):
         """Brings attention to which button is being focussed on"""
-        if self.rect.collidepoint(pygame.mouse.get_pos()):
-            window.blit(self.imageLarger, (self.rect[0] - 5, self.rect[1] - 5, self.rect[2], self.rect[3]))
-        else:
-            window.blit(self.image, self.rect)
+        if self.active:
+            if self.rect.collidepoint(pygame.mouse.get_pos()):
+                window.blit(self.imageLarger, (self.rect[0] - 5, self.rect[1] - 5, self.rect[2], self.rect[3]))
+            else:
+                window.blit(self.image, self.rect)
 
 
     def actionOnPress(self):
         """Which actions to take according to button selected"""
-        if self.name == 'Randomize':
-            self.randomizeShipPositions(pFleet, pGameGrid)
-            self.randomizeShipPositions(cFleet, cGameGrid)
-        elif self.name == 'Reset':
-            self.resetShips(pFleet)
-        elif self.name == 'Deploy':
-            self.deploymentPhase()
-        elif self.name == 'Quit':
-            pass
-        elif self.name == 'Redeploy':
-            self.restartTheGame()
+        if self.active:
+            if self.name == 'Randomize':
+                self.randomizeShipPositions(pFleet, pGameGrid)
+                self.randomizeShipPositions(cFleet, cGameGrid)
+            elif self.name == 'Reset':
+                self.resetShips(pFleet)
+            elif self.name == 'Deploy':
+                self.deploymentPhase()
+            elif self.name == 'Quit':
+                pass
+            elif self.name == 'Redeploy':
+                self.restartTheGame()
 
 
     def randomizeShipPositions(self, shiplist, gameGrid):
@@ -307,13 +309,15 @@ class Player:
                     if posX >= colX[0] and posX < colX[0] + 50 and posY >= colX[1] and posY <= colX[1] + 50:
                         if logicgrid[i][j] != ' ':
                             if logicgrid[i][j] == 'O':
-                                print('Hit')
                                 TOKENS.append(Tokens(REDTOKEN, grid[i][j], 'Hit', None, None, None))
                                 logicgrid[i][j] = 'T'
+                                SHOTSOUND.play()
+                                HITSOUND.play()
                                 self.turn = False
                         else:
                             logicgrid[i][j] = 'X'
-                            print('Miss')
+                            SHOTSOUND.play()
+                            MISSSOUND.play()
                             TOKENS.append(Tokens(GREENTOKEN, grid[i][j], 'Miss', None, None, None))
                             self.turn = False
 
@@ -332,30 +336,119 @@ class EasyComputer:
 
 
     def makeAttack(self, gamelogic):
-        validChoice = False
-        while not validChoice:
-            rowX = random.randint(0, 9)
-            colX = random.randint(0, 9)
+        COMPTURNTIMER = pygame.time.get_ticks()
+        if COMPTURNTIMER - TURNTIMER >= 3000:
+            validChoice = False
+            while not validChoice:
+                rowX = random.randint(0, 9)
+                colX = random.randint(0, 9)
 
-            if gamelogic[rowX][colX] == ' ' or gamelogic[rowX][colX] == 'O':
-                validChoice = True
+                if gamelogic[rowX][colX] == ' ' or gamelogic[rowX][colX] == 'O':
+                    validChoice = True
 
-        if gamelogic[rowX][colX] == 'O':
-            print('Hit PLayers Ship')
-            TOKENS.append(Tokens(REDTOKEN, pGameGrid[rowX][colX], 'Hit', FIRETOKENIMAGELIST, EXPLOSIONIMAGELIST, None))
-            gamelogic[rowX][colX] = 'T'
-            self.turn = False
-        else:
-            gamelogic[rowX][colX] = 'X'
-            TOKENS.append(Tokens(BLUETOKEN, pGameGrid[rowX][colX], 'Miss', None, None, None))
-            print('Missed')
-            self.turn = False
+            if gamelogic[rowX][colX] == 'O':
+                TOKENS.append(Tokens(REDTOKEN, pGameGrid[rowX][colX], 'Hit', FIRETOKENIMAGELIST, EXPLOSIONIMAGELIST, None))
+                gamelogic[rowX][colX] = 'T'
+                SHOTSOUND.play()
+                HITSOUND.play()
+                self.turn = False
+            else:
+                gamelogic[rowX][colX] = 'X'
+                TOKENS.append(Tokens(BLUETOKEN, pGameGrid[rowX][colX], 'Miss', None, None, None))
+                SHOTSOUND.play()
+                MISSSOUND.play()
+                self.turn = False
         return self.turn
 
 
     def draw(self, window):
         if self.turn:
             window.blit(self.status, (cGameGrid[0][0][0] - CELLSIZE, cGameGrid[-1][-1][1] + CELLSIZE))
+
+
+class HardComputer(EasyComputer):
+    def __init__(self):
+        super().__init__()
+        self.moves = []
+
+
+    def makeAttack(self, gamelogic):
+        if len(self.moves) == 0:
+            COMPTURNTIMER = pygame.time.get_ticks()
+            if COMPTURNTIMER - TURNTIMER >= 3000:
+                validChoice = False
+                while not validChoice:
+                    rowX = random.randint(0, 9)
+                    rowY = random.randint(0, 9)
+
+                    if gamelogic[rowX][rowY] == ' ' or gamelogic[rowX][rowY] == 'O':
+                        validChoice = True
+
+                if gamelogic[rowX][rowY] == 'O':
+                    TOKENS.append(
+                        Tokens(REDTOKEN, pGameGrid[rowX][rowY], 'Hit', FIRETOKENIMAGELIST, EXPLOSIONIMAGELIST, None))
+                    gamelogic[rowX][rowY] = 'T'
+                    SHOTSOUND.play()
+                    HITSOUND.play()
+                    self.generateMoves((rowX, rowY), gamelogic)
+                    self.turn = False
+                else:
+                    gamelogic[rowX][rowY] = 'X'
+                    TOKENS.append(Tokens(BLUETOKEN, pGameGrid[rowX][rowY], 'Miss', None, None, None))
+                    SHOTSOUND.play()
+                    MISSSOUND.play()
+                    self.turn = False
+
+        elif len(self.moves) > 0:
+            COMPTURNTIMER = pygame.time.get_ticks()
+            if COMPTURNTIMER - TURNTIMER >= 2000:
+                rowX, rowY = self.moves[0]
+                TOKENS.append(Tokens(REDTOKEN, pGameGrid[rowX][rowY], 'Hit', FIRETOKENIMAGELIST, EXPLOSIONIMAGELIST, None))
+                gamelogic[rowX][rowY] = 'T'
+                SHOTSOUND.play()
+                HITSOUND.play()
+                self.moves.remove((rowX, rowY))
+                self.turn = False
+        return self.turn
+
+
+    def generateMoves(self, coords, grid, lstDir=None):
+        x, y = coords
+        nx, ny = 0, 0
+        for direction in ['North', 'South', 'East', 'West']:
+            if direction == 'North' and lstDir != 'North':
+                nx = x - 1
+                ny = y
+                if not (nx > 9 or ny > 9 or nx < 0 or ny < 0):
+                    if (nx, ny) not in self.moves and grid[nx][ny] == 'O':
+                        self.moves.append((nx, ny))
+                        self.generateMoves((nx, ny), grid, 'South')
+
+            if direction == 'South' and lstDir != 'South':
+                nx = x + 1
+                ny = y
+                if not (nx > 9 or ny > 9 or nx < 0 or ny < 0):
+                    if (nx, ny) not in self.moves and grid[nx][ny] == 'O':
+                        self.moves.append((nx, ny))
+                        self.generateMoves((nx, ny), grid, 'North')
+
+            if direction == 'East' and lstDir != 'East':
+                nx = x
+                ny = y + 1
+                if not (nx > 9 or ny > 9 or nx < 0 or ny < 0):
+                    if (nx, ny) not in self.moves and grid[nx][ny] == 'O':
+                        self.moves.append((nx, ny))
+                        self.generateMoves((nx, ny), grid, 'West')
+
+            if direction == 'West' and lstDir != 'West':
+                nx = x
+                ny = y - 1
+                if not (nx > 9 or ny > 9 or nx < 0 or ny < 0):
+                    if (nx, ny) not in self.moves and grid[nx][ny] == 'O':
+                        self.moves.append((nx, ny))
+                        self.generateMoves((nx, ny), grid, 'East')
+
+        return
 
 
 class Tokens:
@@ -605,11 +698,54 @@ def takeTurns(p1, p2):
             p1.turn = True
 
 
-def updateGameScreen(window):
+def checkForWinners(grid):
+    validGame = True
+    for row in grid:
+        if 'O' in row:
+            validGame = False
+    return validGame
+
+
+def shipLabelMaker(msg):
+    """Makes the ship labels to display on the screen"""
+    textMessage = pygame.font.SysFont('Stencil', 22)
+    textMessage = textMessage.render(msg, 1, (0, 17, 167))
+    textMessage = pygame.transform.rotate(textMessage, 90)
+    return textMessage
+
+
+def displayShipNames(window):
+    """Posting the ship labels to the screen in the correct positions"""
+    shipLabels = []
+    for ship in ['carrier', 'battleship', 'cruiser', 'destroyer', 'submarine', 'patrol boat', 'rescue boat']:
+        shipLabels.append(shipLabelMaker(ship))
+    startPos = 25
+    for item in shipLabels:
+        window.blit(item, (startPos, 600))
+        startPos += 75
+
+
+def mainMenuScreen(window):
+    window.fill((0, 0, 0))
+    window.blit(MAINMENUIMAGE, (0, 0))
+
+    for button in BUTTONS:
+        if button.name in ['Easy Computer', 'Hard Computer']:
+            button.active = True
+            button.draw(window)
+        else:
+            button.active = False
+
+
+def deploymentScreen(window):
     window.fill((0, 0, 0))
 
+    window.blit(BACKGROUND, (0, 0))
+    window.blit(PGAMEGRIDIMG, (0, 0))
+    window.blit(CGAMEGRIDIMG, (cGameGrid[0][0][0] - 50, cGameGrid[0][0][1] - 50))
+
     #  Draws the player and computer grids to the screen
-    showGridOnScreen(window, CELLSIZE, pGameGrid, cGameGrid)
+    # showGridOnScreen(window, CELLSIZE, pGameGrid, cGameGrid)
 
     #  Draw ships to screen
     for ship in pFleet:
@@ -617,16 +753,21 @@ def updateGameScreen(window):
         ship.snapToGridEdge(pGameGrid)
         ship.snapToGrid(pGameGrid)
 
+    displayShipNames(window)
+
     for ship in cFleet:
-        ship.draw(window)
+        # ship.draw(window)
         ship.snapToGridEdge(cGameGrid)
         ship.snapToGrid(cGameGrid)
 
     for button in BUTTONS:
-        button.draw(window)
+        if button.name in ['Randomize', 'Reset', 'Deploy', 'Quit', 'Radar Scan', 'Redeploy']:
+            button.active = True
+            button.draw(window)
+        else:
+            button.active = False
 
     computer.draw(window)
-
 
     radarScan = displayRadarScanner(RADARGRIDIMAGES, INDNUM, SCANNER)
     if not radarScan:
@@ -645,6 +786,29 @@ def updateGameScreen(window):
 
     updateGameLogic(pGameGrid, pFleet, pGameLogic)
     updateGameLogic(cGameGrid, cFleet, cGameLogic)
+
+
+def endScreen(window):
+    window.fill((0, 0, 0))
+
+    window.blit(ENDSCREENIMAGE, (0, 0))
+
+    for button in BUTTONS:
+        if button.name in ['Easy Computer', 'Hard Computer', 'Quit']:
+            button.active = True
+            button.draw(window)
+        else:
+            button.active = False
+
+
+def updateGameScreen(window, GAMESTATE):
+    if GAMESTATE == 'Main Menu':
+        mainMenuScreen(window)
+    elif GAMESTATE == 'Deployment':
+        deploymentScreen(window)
+    elif GAMESTATE == 'Game Over':
+        endScreen(window)
+
     pygame.display.update()
 
 
@@ -658,6 +822,8 @@ DEPLOYMENT = True
 SCANNER = False
 INDNUM = 0
 BLIPPOSITION = None
+TURNTIMER = pygame.time.get_ticks()
+GAMESTATE = 'Main Menu'
 
 
 #  Colors
@@ -685,7 +851,7 @@ FLEET = {
     'rescue ship': ['rescue ship', 'assets/images/ships/rescue ship/rescue ship.png', (500, 600), (20, 95),
                     0, '', None, None]
 }
-
+STAGE = ['Main Menu', 'Deployment', 'Game Over']
 
 #  Loading Game Variables
 pGameGrid = createGameGrid(ROWS, COLS, CELLSIZE, (50, 50))
@@ -701,11 +867,19 @@ printGameLogic()
 
 
 #  Loading Game Sounds and Images
+MAINMENUIMAGE = loadImage('assets/images/background/Battleship.jpg', (SCREENWIDTH // 3 * 2, SCREENHEIGHT))
+ENDSCREENIMAGE = loadImage('assets/images/background/Carrier.jpg', (SCREENWIDTH, SCREENHEIGHT))
+BACKGROUND = loadImage('assets/images/background/gamebg.png', (SCREENWIDTH, SCREENHEIGHT))
+PGAMEGRIDIMG = loadImage('assets/images/grids/player_grid.png', ((ROWS + 1) * CELLSIZE, (COLS + 1) * CELLSIZE))
+CGAMEGRIDIMG = loadImage('assets/images/grids/comp_grid.png', ((ROWS + 1) * CELLSIZE, (COLS + 1) * CELLSIZE))
 BUTTONIMAGE = loadImage('assets/images/buttons/button.png', (150, 50))
+BUTTONIMAGE1 = loadImage('assets/images/buttons/button.png', (250, 100))
 BUTTONS = [
     Button(BUTTONIMAGE, (150, 50), (25, 900), 'Randomize'),
     Button(BUTTONIMAGE, (150, 50), (200, 900), 'Reset'),
-    Button(BUTTONIMAGE, (150, 50), (375, 900), 'Deploy')
+    Button(BUTTONIMAGE, (150, 50), (375, 900), 'Deploy'),
+    Button(BUTTONIMAGE1, (250, 100), (900, SCREENHEIGHT // 2 - 150), 'Easy Computer'),
+    Button(BUTTONIMAGE1, (250, 100), (900, SCREENHEIGHT // 2 + 150), 'Hard Computer')
 ]
 REDTOKEN = loadImage('assets/images/tokens/redtoken.png', (CELLSIZE, CELLSIZE))
 GREENTOKEN = loadImage('assets/images/tokens/greentoken.png', (CELLSIZE, CELLSIZE))
@@ -720,6 +894,12 @@ TOKENS = []
 RADARGRIDIMAGES = loadAnimationImages('assets/images/radar_base/radar_anim', 360, (ROWS * CELLSIZE, COLS * CELLSIZE))
 RADARBLIPIMAGES = loadAnimationImages('assets/images/radar_blip/Blip_', 11, (50, 50))
 RADARGRID = loadImage('assets/images/grids/grid_faint.png', ((ROWS) * CELLSIZE, (COLS) * CELLSIZE))
+HITSOUND = pygame.mixer.Sound('assets/sounds/explosion.wav')
+HITSOUND.set_volume(0.05)
+SHOTSOUND = pygame.mixer.Sound('assets/sounds/gunshot.wav')
+SHOTSOUND.set_volume(0.05)
+MISSSOUND = pygame.mixer.Sound('assets/sounds/splash.wav')
+MISSSOUND.set_volume(0.05)
 
 
 
@@ -747,22 +927,41 @@ while RUNGAME:
                 else:
                     if player1.turn == True:
                         player1.makeAttack(cGameGrid, cGameLogic)
+                        if player1.turn == False:
+                            TURNTIMER = pygame.time.get_ticks()
 
                 for button in BUTTONS:
                     if button.rect.collidepoint(pygame.mouse.get_pos()):
-
-                        if button.name == 'Deploy':
+                        if button.name == 'Deploy' and button.active == True:
                             status = deploymentPhase(DEPLOYMENT)
                             DEPLOYMENT = status
-                        elif button.name == 'Redeploy':
+                        elif button.name == 'Redeploy' and button.active == True:
                             status = deploymentPhase(DEPLOYMENT)
                             DEPLOYMENT = status
-                        elif button.name == 'Quit':
+                        elif button.name == 'Quit' and button.active == True:
                             RUNGAME = False
-                        elif button.name == 'Radar Scan':
+                        elif button.name == 'Radar Scan' and button.active == True:
                             SCANNER = True
                             INDNUM = 0
                             BLIPPOSITION = pick_random_ship_location(cGameLogic)
+                        elif (button.name == 'Easy Computer' or button.name == 'Hard Computer') and button.active == True:
+                            if button.name == 'Easy Computer':
+                                computer = EasyComputer()
+
+                            elif button.name == 'Hard Computer':
+                                computer = HardComputer()
+                            if GAMESTATE == 'Game Over':
+                                TOKENS.clear()
+                                for ship in pFleet:
+                                    ship.returnToDefaultPosition()
+                                randomizeShipPositions(cFleet, cGameGrid)
+                                pGameLogic = createGameLogic(ROWS, COLS)
+                                updateGameLogic(pGameGrid, pFleet, pGameLogic)
+                                cGameLogic = createGameLogic(ROWS, COLS)
+                                updateGameLogic(cGameGrid, cFleet, cGameLogic)
+                                status = deploymentPhase(DEPLOYMENT)
+                                DEPLOYMENT = status
+                            GAMESTATE = STAGE[1]
                         button.actionOnPress()
 
 
@@ -776,9 +975,17 @@ while RUNGAME:
                         if ship.rect.collidepoint(pygame.mouse.get_pos()) and not ship.checkForRotateCollisions(pFleet):
                             ship.rotateShip(True)
 
-    updateGameScreen(GAMESCREEN)
+    updateGameScreen(GAMESCREEN, GAMESTATE)
     if SCANNER == True:
         INDNUM += 1
+
+    if GAMESTATE == 'Deployment' and DEPLOYMENT != True:
+        player1Wins = checkForWinners(cGameLogic)
+        computerWins = checkForWinners(pGameLogic)
+        if player1Wins == True or computerWins == True:
+            GAMESTATE = STAGE[2]
+
+
 
     takeTurns(player1, computer)
 
